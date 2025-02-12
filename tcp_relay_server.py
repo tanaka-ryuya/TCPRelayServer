@@ -10,6 +10,7 @@ class TCPRelayServer:
         self.dst_host = dst_host
         self.dst_port = dst_port
         self.server_socket = None
+        self.upstream_socket = None
         self.client_sockets = []
         self.running = True
 
@@ -82,6 +83,7 @@ class TCPRelayServer:
                 print(f"Error receiving data from upstream: {e}")
                 break
 
+        # 🔥 上流サーバの接続を明示的に閉じる
         self.running = False
         self.cleanup()
 
@@ -94,12 +96,27 @@ class TCPRelayServer:
     def cleanup(self):
         """すべてのソケットをクリーンに閉じる"""
         print("Closing connections...")
+
+        # クライアントの接続を閉じる
+        for client_socket in self.client_sockets:
+            try:
+                client_socket.shutdown(socket.SHUT_RDWR)
+            except Exception:
+                pass
+            client_socket.close()
+
+        # 上流サーバとの接続を安全に閉じる
+        if self.upstream_socket:
+            try:
+                self.upstream_socket.shutdown(socket.SHUT_RDWR)
+            except Exception:
+                pass
+            self.upstream_socket.close()
+
+        # サーバソケットを閉じる
         if self.server_socket:
             self.server_socket.close()
-        if self.upstream_socket:
-            self.upstream_socket.close()
-        for client_socket in self.client_sockets:
-            client_socket.close()
+
         print("Server shut down.")
 
 if __name__ == "__main__":

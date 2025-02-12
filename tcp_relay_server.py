@@ -64,12 +64,12 @@ class TCPRelayServer:
 
     def relay_data(self):
         """上流サーバからのデータを受信し、すべてのクライアントに転送"""
-        while self.running:
-            try:
+        try:
+            while self.running:
                 data = self.upstream_socket.recv(4096)
                 if not data:
                     print("Upstream connection closed.")
-                    break
+                    break  # 上流サーバが終了したらループを抜ける
 
                 # すべてのクライアントに転送
                 for client_socket in self.client_sockets[:]:
@@ -79,13 +79,11 @@ class TCPRelayServer:
                         print("Client disconnected.")
                         self.client_sockets.remove(client_socket)
                         client_socket.close()
-            except Exception as e:
-                print(f"Error receiving data from upstream: {e}")
-                break
-
-        # 🔥 上流サーバの接続を明示的に閉じる
-        self.running = False
-        self.cleanup()
+        except Exception as e:
+            print(f"Error receiving data from upstream: {e}")
+        finally:
+            self.running = False  # 🔥 ここで明示的に停止する
+            self.cleanup()
 
     def handle_exit(self, signum, frame):
         """終了シグナルを処理"""
@@ -104,6 +102,7 @@ class TCPRelayServer:
             except Exception:
                 pass
             client_socket.close()
+        self.client_sockets.clear()
 
         # 上流サーバとの接続を安全に閉じる
         if self.upstream_socket:
@@ -112,10 +111,12 @@ class TCPRelayServer:
             except Exception:
                 pass
             self.upstream_socket.close()
+            self.upstream_socket = None  # 🔥 ここを追加
 
         # サーバソケットを閉じる
         if self.server_socket:
             self.server_socket.close()
+            self.server_socket = None  # 🔥 ここを追加
 
         print("Server shut down.")
 

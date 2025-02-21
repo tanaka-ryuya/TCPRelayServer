@@ -74,5 +74,5 @@ Upon termination, all sockets will be closed properly.
 MIT License
 
 ## Author
-[Tanaka RYUYA](https://github.com/tanaka-ryuya/TCPRelayServer)
+[TANAKA RYUYA](https://github.com/tanaka-ryuya/TCPRelayServer)
 

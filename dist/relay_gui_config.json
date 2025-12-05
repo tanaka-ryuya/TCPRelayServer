@@ -1,0 +1,13 @@
+{
+  "tabs": [
+    {
+      "src_host": "127.0.0.1",
+      "src_port": "9999",
+      "dst_host": "127.0.0.1",
+      "dst_port": "10000",
+      "mode": "connect-listen",
+      "dump": false,
+      "retry": "5"
+    }
+  ]
+}

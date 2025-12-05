@@ -15,13 +15,22 @@ class RelayTab(ttk.Frame):
     """
     1つのタブ = 1インスタンスのTCPRelayServer + GUI一式
     """
-    def __init__(self, master, close_callback=None, initial_config=None):
+    def __init__(self, master, close_callback=None, initial_config=None,
+                 status_callback=None):
         super().__init__(master)
 
         self.server = None
         self.server_thread = None
         self.event_queue = queue.Queue()
         self.close_callback = close_callback
+
+        # タブ状態通知用（RelayGUI側に渡す）
+        self.status_callback = status_callback
+
+        # 接続ステータス保持
+        self._up_connected = False
+        self._down_connected = False
+        self._server_running = False  # 起動中かどうか
 
         self._create_widgets()
 
@@ -89,7 +98,7 @@ class RelayTab(ttk.Frame):
         self.stop_btn = ttk.Button(btn_frame, text="Stop", command=self.stop_server, state=tk.DISABLED)
         self.stop_btn.pack(side=tk.LEFT, padx=5)
 
-        # タブ内にも閉じるボタン（お好みで）
+        # タブ内にも閉じるボタン
         self.close_tab_btn = ttk.Button(btn_frame, text="タブを閉じる", command=self._request_close)
         self.close_tab_btn.pack(side=tk.LEFT, padx=20)
 
@@ -160,20 +169,23 @@ class RelayTab(ttk.Frame):
         self.server.on_downstream_status_change = self._on_downstream_status_change
         self.server.on_client_count_change = self._on_client_count_change
         self.server.on_log = self._on_server_log
-
-        # ★ 新しくクライアント一覧の更新用コールバックも登録しておく
-        # TCPRelayServer 側で、クライアントの接続/切断時に
-        #   if self.on_client_list_change:
-        #       self.on_client_list_change(list_of_str)
-        # のように呼び出す想定
         self.server.on_client_list_change = self._on_client_list_change
 
         self.server_thread = threading.Thread(target=self.server.start, daemon=True)
         self.server_thread.start()
 
+        self._server_running = True
+
         self.start_btn.config(state=tk.DISABLED)
         self.stop_btn.config(state=tk.NORMAL)
         self._append_log("サーバを起動しました。")
+
+        # 起動直後（まだ両側Disconnected）の状態をタブに反映 → 赤
+        if self.status_callback:
+            try:
+                self.status_callback(self, self._up_connected, self._down_connected, running=self._server_running)
+            except Exception:
+                pass
 
     def stop_server(self):
         # すでにサーバがあれば、まずコールバックを切る
@@ -184,13 +196,12 @@ class RelayTab(ttk.Frame):
                 self.server.on_downstream_status_change = None
                 self.server.on_client_count_change = None
                 self.server.on_log = None
-                # client リストコールバックを使っている場合だけ
                 if hasattr(self.server, "on_client_list_change"):
                     self.server.on_client_list_change = None
             except Exception:
                 pass
 
-            # そのうえで停止を指示
+            # 停止指示
             try:
                 self.server.handle_exit()
             except Exception as e:
@@ -198,12 +209,12 @@ class RelayTab(ttk.Frame):
 
         # サーバースレッドの終了をできるだけ待つ
         if self.server_thread and self.server_thread.is_alive():
-            # 完全に終わるまで待ちたいなら timeout なしでもOK（ただし固まるリスクあり）
             self.server_thread.join(timeout=3.0)
 
         # 参照をクリア
         self.server = None
         self.server_thread = None
+        self._server_running = False
 
         # ボタン状態とステータス表示をリセット
         self.start_btn.config(state=tk.NORMAL)
@@ -213,6 +224,14 @@ class RelayTab(ttk.Frame):
         self._set_client_count(0)
         self._append_log("サーバを停止しました。")
 
+        # タブ色を「未起動状態（グレー）」に明示的に反映
+        if self.status_callback:
+            try:
+                self.status_callback(self, False, False, running=False)
+            except Exception:
+                pass
+
+    # --- TCPRelayServer からのコールバック → イベントキューに積む ---
 
     def _on_upstream_status_change(self, connected: bool):
         self.event_queue.put(("upstream", connected))
@@ -252,14 +271,28 @@ class RelayTab(ttk.Frame):
         self.after(200, self._process_events)
 
     def _set_upstream_status(self, connected: bool):
+        self._up_connected = connected
         text = "上流: Connected" if connected else "上流: Disconnected"
         color = "blue" if connected else "red"
         self.up_status_label.config(text=text, foreground=color)
 
+        if self.status_callback:
+            try:
+                self.status_callback(self, self._up_connected, self._down_connected, running=self._server_running)
+            except Exception:
+                pass
+
     def _set_downstream_status(self, connected: bool):
+        self._down_connected = connected
         text = "下流: Connected" if connected else "下流: Disconnected"
         color = "blue" if connected else "red"
         self.down_status_label.config(text=text, foreground=color)
+
+        if self.status_callback:
+            try:
+                self.status_callback(self, self._up_connected, self._down_connected, running=self._server_running)
+            except Exception:
+                pass
 
     def _set_client_count(self, count: int):
         self.client_status_label.config(text=f"クライアント: {count}")
@@ -278,9 +311,14 @@ class RelayTab(ttk.Frame):
         self.log_text.see(tk.END)
 
     def _update_status_labels(self):
-        # 初期状態は切断扱い（赤）
+        # 初期状態は切断扱い（ラベルは赤、タブはグレー）
         self._set_upstream_status(False)
         self._set_downstream_status(False)
+        if self.status_callback:
+            try:
+                self.status_callback(self, False, False, running=False)
+            except Exception:
+                pass
 
     def get_config(self) -> dict:
         return {
@@ -358,14 +396,89 @@ class RelayGUI(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
     # ------------------------
+    # タブ状態の色更新
+    # ------------------------
+    def _update_tab_visual_state(self, tab_instance, up_connected, down_connected, running=True):
+        """
+        タブタイトル色のルール:
+        - running == False      → グレー（未起動）
+        - running == True かつ 両方接続 → 青（正常）
+        - running == True かつ どちらか未接続 → 赤（片側/両側切断）
+        """
+        btn = self.tab_map.get(tab_instance)
+        if not btn:
+            return
+
+        if not running:
+            btn.config(foreground="gray")
+        else:
+            if up_connected and down_connected:
+                btn.config(foreground="blue")
+            else:
+                btn.config(foreground="red")
+
+    # ------------------------
     # タブ管理
     # ------------------------
     def _add_relay_tab(self, initial_config=None, select=True):
         """新しいタブとそのボタンを作成し、タブマネージャに追加する"""
+
+        # initial_config が指定されていない & 既にタブがある場合は
+        # 「左隣のタブ（= self.tabs[-1]）を見て自動設定」する
+        if initial_config is None and self.tabs:
+            prev_tab = self.tabs[-1]
+            prev_conf = prev_tab.get_config()
+
+            dst_host = prev_conf.get("dst_host", "127.0.0.1")
+            dst_port_str = str(prev_conf.get("dst_port", "4001"))
+
+            try:
+                base_dst_port = int(dst_port_str)
+            except ValueError:
+                base_dst_port = None
+
+            chain_conf = {}
+
+            # 新タブの上流 = 左隣タブの下流
+            chain_conf["src_host"] = dst_host
+            chain_conf["src_port"] = dst_port_str
+
+            # 新タブの下流 = 左隣タブの下流と同じアドレス＋ポート+1
+            chain_conf["dst_host"] = dst_host
+            if base_dst_port is not None:
+                chain_conf["dst_port"] = str(base_dst_port + 1)
+            else:
+                chain_conf["dst_port"] = ""
+
+            # 左隣タブの「二次側」が Listen か Connect かで mode を決める
+            prev_mode = prev_conf.get("mode", "connect-listen")
+
+            # 二次側が Listen のモード
+            downstream_listen_modes = {"connect-listen", "listen-listen"}
+            # 二次側が Connect のモード
+            downstream_connect_modes = {"listen-connect", "connect-connect"}
+
+            if prev_mode in downstream_listen_modes:
+                # 左隣の二次側が Listen → 新タブは connect-listen
+                chain_conf["mode"] = "connect-listen"
+            elif prev_mode in downstream_connect_modes:
+                # 左隣の二次側が Connect → 新タブは listen-listen
+                chain_conf["mode"] = "listen-listen"
+            else:
+                # 想定外の文字列が来たときのフォールバック
+                chain_conf["mode"] = "connect-listen"
+
+            # dump / retry はとりあえず引き継ぎ
+            chain_conf["dump"] = prev_conf.get("dump", False)
+            chain_conf["retry"] = prev_conf.get("retry", "5")
+
+            initial_config = chain_conf
+
         new_tab_content = RelayTab(
             self.content_container,
             close_callback=self.close_tab,
             initial_config=initial_config,
+            status_callback=self._update_tab_visual_state,
         )
         self.tabs.append(new_tab_content)
 
@@ -385,6 +498,9 @@ class RelayGUI(tk.Tk):
         tab_button.pack(before=self.add_button, side="left", padx=(2, 0))
 
         self.tab_map[new_tab_content] = tab_button
+
+        # 初期状態は未起動 → グレーにしておく
+        self._update_tab_visual_state(new_tab_content, False, False, running=False)
 
         if select:
             self._switch_tab(new_tab_content)

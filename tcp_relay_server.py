@@ -90,7 +90,7 @@ class TCPRelayServer:
                     # 切断済みの場合はここでは無視（送信時に掃除）
                     pass
 
-        dbg = f"[DEBUG] listen-side state ({reason}) clients={count} [{', '.join(info_list)}]"
+        dbg = f"listen-side state ({reason}) clients={count} [{', '.join(info_list)}]"
         print(dbg)
         if self.on_log:
             try:
@@ -131,7 +131,7 @@ class TCPRelayServer:
             except OSError:
                 pass
 
-        dbg = f"[DEBUG] connect-side state ({reason}) connected={connected} count={count} [{', '.join(info_list)}]"
+        dbg = f"connect-side state ({reason}) connected={connected} count={count} [{', '.join(info_list)}]"
         print(dbg)
         if self.on_log:
             try:
@@ -170,11 +170,9 @@ class TCPRelayServer:
         # 上流設定
         try:
             if self.mode in ["connect-listen", "connect-connect"]:
-                self._log("[DEBUG] starting connect_upstream thread")
                 threading.Thread(target=self.connect_upstream, daemon=True).start()
 
             if self.mode in ["listen-connect", "listen-listen"]:
-                self._log(f"[DEBUG] trying to listen upstream on {self.src_host}:{self.src_port}")
                 self._listen_upstream_or_die()
         except OSError as e:
             self._log(
@@ -187,11 +185,9 @@ class TCPRelayServer:
         if self.running:
             try:
                 if self.mode in ["connect-listen", "listen-listen"]:
-                    self._log(f"[DEBUG] trying to listen downstream (clients) on {self.dst_host}:{self.dst_port}")
                     self._listen_clients_or_die()
 
                 if self.mode in ["listen-connect", "connect-connect"]:
-                    self._log("[DEBUG] starting connect_downstream thread")
                     threading.Thread(target=self.connect_downstream, daemon=True).start()
             except OSError as e:
                 self._log(
@@ -216,12 +212,12 @@ class TCPRelayServer:
         while self.running:
             s = None
             try:
-                self._log(f"[DEBUG] connect_upstream: trying {self.src_host}:{self.src_port}")
+                self._log(f"connect_upstream: trying {self.src_host}:{self.src_port}")
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 # 接続試行がブロックされるのを防ぐためタイムアウトを設定
                 s.settimeout(self.retry_interval)
                 s.connect((self.src_host, self.src_port))
-                s.settimeout(None) # 接続後はブロックモードに戻す
+                s.settimeout(None)  # 接続後はブロックモードに戻す
                 self.upstream_socket = s
 
                 self._log(f"Connected to upstream {self.src_host}:{self.src_port}")
@@ -269,7 +265,7 @@ class TCPRelayServer:
                         self.on_upstream_status_change(False)
                     except Exception:
                         pass
-                self._log("[DEBUG] connect_upstream: disconnected, loop end or retry")
+                self._log("connect_upstream: disconnected, loop end or retry")
 
     # ---------------------------------------
     # 上流 listen
@@ -291,19 +287,20 @@ class TCPRelayServer:
 
     def _accept_upstream_loop(self):
         while self.running:
+            sock = None
             try:
-                self._log("[DEBUG] waiting for upstream accept...")
+                self._log("waiting for upstream accept...")
                 sock, addr = self.upstream_server_socket.accept()
                 self._log(f"Upstream connected: {addr}")
-                
+
                 # 既存の接続があれば強制的に閉じる (listen-connect/listen-listen モードは1対1の upstream)
                 if self.upstream_socket:
-                    self._log("[DEBUG] closing previous upstream connection")
+                    self._log("closing previous upstream connection")
                     try:
                         self.upstream_socket.close()
                     except Exception:
                         pass
-                
+
                 self.upstream_socket = sock
                 if self.on_upstream_status_change:
                     try:
@@ -321,15 +318,15 @@ class TCPRelayServer:
                     break
                 self._log(f"Error accepting upstream (unexpected): {e}")
             finally:
-                if self.upstream_socket is sock:
+                if sock is not None and self.upstream_socket is sock:
                     self.upstream_socket = None
-                
+
                 if self.on_upstream_status_change:
                     try:
                         self.on_upstream_status_change(False)
                     except Exception:
                         pass
-                self._log("[DEBUG] upstream accept loop: upstream disconnected")
+                self._log("upstream accept loop: upstream disconnected")
 
     # ---------------------------------------
     # 下流 listen（複数クライアント）
@@ -352,19 +349,12 @@ class TCPRelayServer:
     def _accept_clients_loop(self):
         while self.running:
             try:
-                self._log("[DEBUG] waiting for downstream client accept...")
+                self._log("waiting for downstream client accept...")
                 client_socket, addr = self.client_server_socket.accept()
                 self._log(f"Client connected: {addr}")
 
                 with self.client_lock:
                     self.client_sockets.append(client_socket)
-                    dbg = f"[DEBUG] client_sockets append: now {len(self.client_sockets)}"
-                    print(dbg)
-                    if self.on_log:
-                        try:
-                            self.on_log(dbg)
-                        except Exception:
-                            pass
 
                 self._notify_downstream_listen_state(reason="accept")
             except OSError as e:
@@ -383,12 +373,12 @@ class TCPRelayServer:
         while self.running:
             s = None
             try:
-                self._log(f"[DEBUG] connect_downstream: trying {self.dst_host}:{self.dst_port}")
+                self._log(f"connect_downstream: trying {self.dst_host}:{self.dst_port}")
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 # 接続試行がブロックされるのを防ぐためタイムアウトを設定
                 s.settimeout(self.retry_interval)
                 s.connect((self.dst_host, self.dst_port))
-                s.settimeout(None) # 接続後はブロックモードに戻す
+                s.settimeout(None)  # 接続後はブロックモードに戻す
                 self.downstream_socket = s
 
                 self._log(f"Connected to downstream {self.dst_host}:{self.dst_port}")
@@ -398,28 +388,28 @@ class TCPRelayServer:
                 while self.running and self.downstream_socket is s:
                     try:
                         # ゼロバイト受信 (MSG_PEEK) を試みて接続状態を確認
-                        s.settimeout(0.5) # 一時的に短いタイムアウトを設定
+                        s.settimeout(0.5)  # 一時的に短いタイムアウトを設定
                         # データを消費せず、ソケットが切れたかをチェックする
-                        data = s.recv(1, socket.MSG_PEEK) 
-                        s.settimeout(None) # ブロックモードに戻す
+                        data = s.recv(1, socket.MSG_PEEK)
+                        s.settimeout(None)  # ブロックモードに戻す
 
                         if data == b'':
                             # 0バイトのデータ受信は接続が正常に切断されたことを示す
-                            self._log("[DEBUG] Downstream socket detected closed (recv(1) peek returned empty).")
+                            self._log("Downstream socket detected closed (recv(1) peek returned empty).")
                             break
-                        
+
                         # データが届いている場合は無視（一方向リレーのため）
-                        time.sleep(0.1) # サーバー負荷軽減のため短い待機
+                        time.sleep(0.1)  # サーバー負荷軽減のため短い待機
 
                     except socket.timeout:
                         # データが来ていないだけなので継続
                         continue
                     except OSError as e:
                         # 接続が切れたことによるエラー
-                        self._log(f"[DEBUG] Downstream socket detected error: {e}")
+                        self._log(f"Downstream socket detected error: {e}")
                         break
                     except Exception as e:
-                        self._log(f"[DEBUG] Downstream socket check failed (unexpected): {e}")
+                        self._log(f"Downstream socket check failed (unexpected): {e}")
                         break
 
             except OSError as e:
@@ -453,7 +443,7 @@ class TCPRelayServer:
                         pass
                     self.downstream_socket = None
                     self._notify_downstream_connect_state(False, reason="connect_downstream_disconnected")
-                    self._log("[DEBUG] connect_downstream: disconnected, loop end or retry")
+                    self._log("connect_downstream: disconnected, loop end or retry")
 
     # ---------------------------------------
     # 中継（上流 → 下流）
@@ -479,8 +469,7 @@ class TCPRelayServer:
                             pass
                     break
 
-                self._log(f"[DEBUG] relay_from_upstream: received {len(data)} bytes")
-
+                # ★dumpフラグが立っているときだけ中身をログに出す（サイズログは出さない）
                 if self.dump:
                     try:
                         text = data.decode("utf-8")
@@ -492,8 +481,6 @@ class TCPRelayServer:
                 if self.mode in ["connect-listen", "listen-listen"]:
                     with self.client_lock:
                         targets = list(self.client_sockets)
-
-                    self._log(f"[DEBUG] relay_from_upstream: broadcasting to {len(targets)} clients")
 
                     dead = []
                     for s in targets:
@@ -512,7 +499,6 @@ class TCPRelayServer:
                             for s in dead:
                                 try:
                                     self.client_sockets.remove(s)
-                                    self._log("[DEBUG] client_sockets remove dead client")
                                 except ValueError:
                                     pass
                                 try:
@@ -526,7 +512,6 @@ class TCPRelayServer:
                     if self.downstream_socket:
                         try:
                             self.downstream_socket.sendall(data)
-                            self._log("[DEBUG] relay_from_upstream: sent to downstream (connect-side)")
                         except Exception as e:
                             self._log(f"Error sending to downstream: {e}")
                             try:
@@ -622,7 +607,6 @@ def main():
         print("Error: Source and Destination must be in the format host:port")
         sys.exit(1)
 
-
     relay_server = TCPRelayServer(
         src_host, int(src_port),
         dst_host, int(dst_port),
@@ -636,7 +620,7 @@ def main():
     try:
         signal.signal(signal.SIGTERM, relay_server.handle_exit)
     except ValueError:
-        pass # Windowsでは無視する
+        pass  # Windowsでは無視する
 
     relay_server.start()
 

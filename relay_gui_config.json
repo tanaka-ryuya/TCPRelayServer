@@ -53,6 +53,33 @@
       "mode": "listen-listen",
       "dump": false,
       "retry": "5"
+    },
+    {
+      "src_host": "127.0.0.1",
+      "src_port": "10005",
+      "dst_host": "127.0.0.1",
+      "dst_port": "10006",
+      "mode": "connect-listen",
+      "dump": false,
+      "retry": "5"
+    },
+    {
+      "src_host": "127.0.0.1",
+      "src_port": "10006",
+      "dst_host": "127.0.0.1",
+      "dst_port": "10007",
+      "mode": "connect-connect",
+      "dump": false,
+      "retry": "5"
+    },
+    {
+      "src_host": "127.0.0.1",
+      "src_port": "10007",
+      "dst_host": "127.0.0.1",
+      "dst_port": "10008",
+      "mode": "listen-listen",
+      "dump": false,
+      "retry": "5"
     }
   ]
 }

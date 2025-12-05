@@ -7,7 +7,7 @@ import json
 import os
 from tcp_relay_server import TCPRelayServer
 
-        
+
 CONFIG_FILE = "relay_gui_config.json"
 
 
@@ -37,6 +37,11 @@ class RelayTab(ttk.Frame):
     def _create_widgets(self):
         frm = ttk.Frame(self)
         frm.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        # フレーム内グリッドの伸縮設定（ログを大きく広がるように）
+        frm.columnconfigure(0, weight=1)
+        frm.columnconfigure(1, weight=1)
+        frm.columnconfigure(2, weight=1)
 
         # --- 接続設定 ---
         row = 0
@@ -92,19 +97,28 @@ class RelayTab(ttk.Frame):
         row += 1
         status_frame = ttk.LabelFrame(frm, text="接続ステータス")
         status_frame.grid(row=row, column=0, columnspan=3, sticky="ew", pady=5)
+        status_frame.columnconfigure(0, weight=1)
         status_frame.columnconfigure(1, weight=1)
+        status_frame.columnconfigure(2, weight=1)
 
-        self.up_status_label = ttk.Label(status_frame, text="上流: Disconnected")
+        self.up_status_label = ttk.Label(status_frame, text="上流: Disconnected", foreground="red")
         self.up_status_label.grid(row=0, column=0, sticky="w")
-        self.down_status_label = ttk.Label(status_frame, text="下流: Disconnected")
+        self.down_status_label = ttk.Label(status_frame, text="下流: Disconnected", foreground="red")
         self.down_status_label.grid(row=0, column=1, sticky="w")
         self.client_status_label = ttk.Label(status_frame, text="クライアント: 0")
         self.client_status_label.grid(row=0, column=2, sticky="w")
+
+        # クライアント一覧表示
+        ttk.Label(status_frame, text="クライアント一覧").grid(row=1, column=0, sticky="nw")
+        self.client_listbox = tk.Listbox(status_frame, height=3)
+        self.client_listbox.grid(row=1, column=1, columnspan=2, sticky="nsew", padx=(5, 0), pady=(2, 2))
 
         # --- ログ表示 ---
         row += 1
         log_frame = ttk.LabelFrame(frm, text="ログ")
         log_frame.grid(row=row, column=0, columnspan=3, sticky="nsew", pady=5)
+
+        # この行が縦方向に広がるように
         frm.rowconfigure(row, weight=1)
 
         self.log_text = scrolledtext.ScrolledText(log_frame, height=10)
@@ -147,6 +161,13 @@ class RelayTab(ttk.Frame):
         self.server.on_client_count_change = self._on_client_count_change
         self.server.on_log = self._on_server_log
 
+        # ★ 新しくクライアント一覧の更新用コールバックも登録しておく
+        # TCPRelayServer 側で、クライアントの接続/切断時に
+        #   if self.on_client_list_change:
+        #       self.on_client_list_change(list_of_str)
+        # のように呼び出す想定
+        self.server.on_client_list_change = self._on_client_list_change
+
         self.server_thread = threading.Thread(target=self.server.start, daemon=True)
         self.server_thread.start()
 
@@ -155,23 +176,43 @@ class RelayTab(ttk.Frame):
         self._append_log("サーバを起動しました。")
 
     def stop_server(self):
+        # すでにサーバがあれば、まずコールバックを切る
         if self.server:
+            try:
+                # 古いサーバからの late イベントが GUI を上書きしないようにする
+                self.server.on_upstream_status_change = None
+                self.server.on_downstream_status_change = None
+                self.server.on_client_count_change = None
+                self.server.on_log = None
+                # client リストコールバックを使っている場合だけ
+                if hasattr(self.server, "on_client_list_change"):
+                    self.server.on_client_list_change = None
+            except Exception:
+                pass
+
+            # そのうえで停止を指示
             try:
                 self.server.handle_exit()
             except Exception as e:
                 self._append_log(f"サーバ停止中にエラー: {e}")
-            self.server = None
 
+        # サーバースレッドの終了をできるだけ待つ
         if self.server_thread and self.server_thread.is_alive():
-            self.server_thread.join(timeout=1.0)
+            # 完全に終わるまで待ちたいなら timeout なしでもOK（ただし固まるリスクあり）
+            self.server_thread.join(timeout=3.0)
+
+        # 参照をクリア
+        self.server = None
         self.server_thread = None
 
+        # ボタン状態とステータス表示をリセット
         self.start_btn.config(state=tk.NORMAL)
         self.stop_btn.config(state=tk.DISABLED)
         self._set_upstream_status(False)
         self._set_downstream_status(False)
         self._set_client_count(0)
         self._append_log("サーバを停止しました。")
+
 
     def _on_upstream_status_change(self, connected: bool):
         self.event_queue.put(("upstream", connected))
@@ -181,6 +222,13 @@ class RelayTab(ttk.Frame):
 
     def _on_client_count_change(self, count: int):
         self.event_queue.put(("clients", count))
+
+    def _on_client_list_change(self, clients):
+        """
+        TCPRelayServer から渡されるクライアント一覧用のコールバック。
+        clients は ["127.0.0.1:50000", ...] のようなリストを想定。
+        """
+        self.event_queue.put(("client_list", clients))
 
     def _on_server_log(self, message: str):
         self.event_queue.put(("log", message))
@@ -195,6 +243,8 @@ class RelayTab(ttk.Frame):
                     self._set_downstream_status(value)
                 elif event == "clients":
                     self._set_client_count(value)
+                elif event == "client_list":
+                    self._update_client_list(value)
                 elif event == "log":
                     self._append_log(value)
         except queue.Empty:
@@ -203,14 +253,24 @@ class RelayTab(ttk.Frame):
 
     def _set_upstream_status(self, connected: bool):
         text = "上流: Connected" if connected else "上流: Disconnected"
-        self.up_status_label.config(text=text)
+        color = "blue" if connected else "red"
+        self.up_status_label.config(text=text, foreground=color)
 
     def _set_downstream_status(self, connected: bool):
         text = "下流: Connected" if connected else "下流: Disconnected"
-        self.down_status_label.config(text=text)
+        color = "blue" if connected else "red"
+        self.down_status_label.config(text=text, foreground=color)
 
     def _set_client_count(self, count: int):
         self.client_status_label.config(text=f"クライアント: {count}")
+
+    def _update_client_list(self, clients):
+        """
+        クライアント一覧リストボックスの内容を更新
+        """
+        self.client_listbox.delete(0, tk.END)
+        for c in clients:
+            self.client_listbox.insert(tk.END, c)
 
     def _append_log(self, message: str):
         now = time.strftime("%H:%M:%S")
@@ -218,7 +278,9 @@ class RelayTab(ttk.Frame):
         self.log_text.see(tk.END)
 
     def _update_status_labels(self):
-        pass
+        # 初期状態は切断扱い（赤）
+        self._set_upstream_status(False)
+        self._set_downstream_status(False)
 
     def get_config(self) -> dict:
         return {

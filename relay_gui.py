@@ -56,14 +56,14 @@ class RelayTab(ttk.Frame):
         row = 0
         ttk.Label(frm, text="上流 (src host:port)").grid(row=row, column=0, sticky="w")
         self.src_host_var = tk.StringVar(value="127.0.0.1")
-        self.src_port_var = tk.StringVar(value="4001")
+        self.src_port_var = tk.StringVar(value="9999")
         ttk.Entry(frm, textvariable=self.src_host_var, width=20).grid(row=row, column=1, sticky="w")
         ttk.Entry(frm, textvariable=self.src_port_var, width=8).grid(row=row, column=2, sticky="w")
 
         row += 1
         ttk.Label(frm, text="下流 (dst host:port)").grid(row=row, column=0, sticky="w")
-        self.dst_host_var = tk.StringVar(value="0.0.0.0")
-        self.dst_port_var = tk.StringVar(value="5000")
+        self.dst_host_var = tk.StringVar(value="127.0.0.1")
+        self.dst_port_var = tk.StringVar(value="10000")
         ttk.Entry(frm, textvariable=self.dst_host_var, width=20).grid(row=row, column=1, sticky="w")
         ttk.Entry(frm, textvariable=self.dst_port_var, width=8).grid(row=row, column=2, sticky="w")
 

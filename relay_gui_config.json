@@ -6,7 +6,7 @@
       "dst_host": "127.0.0.1",
       "dst_port": "10000",
       "mode": "connect-listen",
-      "dump": true,
+      "dump": false,
       "retry": "5"
     },
     {
@@ -14,62 +14,44 @@
       "src_port": "10000",
       "dst_host": "127.0.0.1",
       "dst_port": "10001",
-      "mode": "connect-listen",
-      "dump": true,
+      "mode": "connect-connect",
+      "dump": false,
       "retry": "5"
     },
     {
       "src_host": "127.0.0.1",
       "src_port": "10001",
       "dst_host": "127.0.0.1",
-      "dst_port": "20000",
-      "mode": "connect-connect",
-      "dump": true,
-      "retry": "5"
-    },
-    {
-      "src_host": "127.0.0.1",
-      "src_port": "20000",
-      "dst_host": "127.0.0.1",
-      "dst_port": "20001",
+      "dst_port": "10002",
       "mode": "listen-listen",
-      "dump": true,
+      "dump": false,
       "retry": "5"
     },
     {
       "src_host": "127.0.0.1",
-      "src_port": "20001",
+      "src_port": "10002",
       "dst_host": "127.0.0.1",
-      "dst_port": "20002",
-      "mode": "connect-listen",
-      "dump": true,
+      "dst_port": "10003",
+      "mode": "connect-connect",
+      "dump": false,
       "retry": "5"
     },
     {
       "src_host": "127.0.0.1",
-      "src_port": "9999",
+      "src_port": "10003",
+      "dst_host": "127.0.0.1",
+      "dst_port": "10004",
+      "mode": "listen-connect",
+      "dump": false,
+      "retry": "5"
+    },
+    {
+      "src_host": "127.0.0.1",
+      "src_port": "10004",
       "dst_host": "127.0.0.1",
       "dst_port": "10005",
-      "mode": "connect-connect",
-      "dump": true,
-      "retry": "5"
-    },
-    {
-      "src_host": "127.0.0.1",
-      "src_port": "10005",
-      "dst_host": "127.0.0.1",
-      "dst_port": "10006",
-      "mode": "listen-connect",
-      "dump": true,
-      "retry": "5"
-    },
-    {
-      "src_host": "127.0.0.1",
-      "src_port": "10006",
-      "dst_host": "127.0.0.1",
-      "dst_port": "10007",
       "mode": "listen-listen",
-      "dump": true,
+      "dump": false,
       "retry": "5"
     }
   ]

@@ -1,116 +1,129 @@
-<details open>
-  <summary>🇺🇸 English</summary>
+﻿# TCP Relay Server
 
-  # TCP Relay Server
+## English
 
-  ## Overview
-  The **TCP Relay Server** is a Python-based TCP relay tool that allows forwarding data between a source and a destination. It supports multiple modes, automatic reconnection, and optional data dumping for debugging.
+### Overview
+TCP Relay Server forwards upstream traffic to a downstream destination in a single direction. It offers four connection modes, automatic reconnection, optional data dumping, and a GUI for operating multiple relays in parallel.
 
-  **Note:** This relay server only supports protocols where data is unidirectionally transmitted from the source to the destination. Bidirectional communication is not supported.
+**Note:** Only one-way flows (upstream -> downstream) are supported. Bidirectional relaying is not implemented.
 
-  ## Features
-  - Supports **four relay modes**:
-    - `connect-listen`: Connect to an upstream server and listen for downstream clients.
-    - `listen-connect`: Listen for an upstream connection and connect to a downstream server.
-    - `connect-connect`: Connect to both upstream and downstream servers.
-    - `listen-listen`: Listen for both upstream and downstream connections.
-  - **Automatic reconnection** when a connection is lost.
-  - **Multiple client support** in `connect-listen` and `listen-listen` modes.
-  - **Data dumping** option to output transmitted data to stdout.
-  - **Graceful shutdown** using signal handling.
+### Features
+- Four relay modes: `connect-listen`, `listen-connect`, `connect-connect`, `listen-listen`
+- Automatic reconnection when a link drops (`--retry` seconds, default 5)
+- Multiple downstream clients in `connect-listen` and `listen-listen` modes
+- Optional payload dump to stdout/log area (`--dump` or GUI checkbox)
+- GUI with multi-tab management and auto-saved settings
 
-  ## Requirements
-  - Python 3.x
+### Requirements
+- Python 3.x
+- tkinter (bundled with standard Python; already included in the packaged GUI binary)
 
-  ## Installation
-  Clone the repository and install any required dependencies if necessary:
-  ```sh
-  $ git clone https://github.com/yourrepo/tcp-relay-server.git
-  $ cd tcp-relay-server
-  ```
-  <button onclick="navigator.clipboard.writeText('$ git clone https://github.com/yourrepo/tcp-relay-server.git\n$ cd tcp-relay-server')">Copy</button>
+### Installation
+1. Clone the repository:
+   ```sh
+   git clone https://github.com/tanaka-ryuya/TCPRelayServer.git
+   cd TCPRelayServer
+   ```
+2. (Optional) Create a virtual environment:
+   ```sh
+   python -m venv .venv
+   .\.venv\Scripts\activate
+   ```
+3. No extra pip packages are required for the CLI or GUI.
 
-  ## Usage
-  Run the relay server with the required parameters:
-  ```sh
-  $ python relay_server.py <source_address>:<source_port> <destination_address>:<destination_port> --mode <mode> [--dump]
-  ```
-  <button onclick="navigator.clipboard.writeText('$ python relay_server.py <source_address>:<source_port> <destination_address>:<destination_port> --mode <mode> [--dump]')">Copy</button>
+### CLI Usage
+Run `tcp_relay_server.py` (or `dist\\tcp_relay_server.exe`) with the required endpoints:
+```sh
+python tcp_relay_server.py <src_host>:<src_port> <dst_host>:<dst_port> --mode <mode> [--dump] [--retry <seconds>]
+```
 
-  ### Arguments
-  | Argument | Description |
-  |----------|-------------|
-  | `<source_address>:<source_port>` | The address and port of the upstream source. |
-  | `<destination_address>:<destination_port>` | The address and port of the downstream destination. |
-  | `--mode` | Relay mode (one of `connect-listen`, `listen-connect`, `connect-connect`, `listen-listen`). Default: `connect-listen`. |
-  | `--dump` | Optional. Prints relayed data to stdout. |
+Arguments:
+- `<src_host>:<src_port>`: Upstream source to read from
+- `<dst_host>:<dst_port>`: Downstream destination to write to
+- `--mode`: One of `connect-listen`, `listen-connect`, `connect-connect`, `listen-listen` (default: `connect-listen`)
+- `--dump`: Print relayed data
+- `--retry <seconds>`: Reconnect interval (default: 5)
 
-  ## Signal Handling
-  The relay server can be stopped gracefully using:
-  - `CTRL+C` (SIGINT)
-  - `kill <PID>` (SIGTERM)
+### GUI Usage
+- From source: `python relay_gui.py`
+- Packaged binary: `dist\\relay_gui.exe`
 
-  Upon termination, all sockets will be closed properly.
+Operation per tab:
+1. Set upstream host/port and downstream host/port.
+2. Choose mode and (optional) enable "dump to log".
+3. Set reconnect interval seconds.
+4. Click `Start` to run / `Stop` to halt the relay for that tab.
+5. Use the `+` button to add another tab (defaults chain from the previous tab). Right-click a tab header or use the `タブを閉じる` button to remove it.
 
-  ## License
-  MIT License
+Configuration is automatically saved to `relay_gui_config.json` on exit and loaded on the next start. Logs and connection status are shown in each tab.
 
-  ## Author
-  [TANAKA RYUYA](https://github.com/tanaka-ryuya/TCPRelayServer)
+### License
+MIT License
 
-</details>
+### Author
+[TANAKA RYUYA](https://github.com/tanaka-ryuya/TCPRelayServer)
 
-<details>
-  <summary>🇯🇵 日本語</summary>
+---
 
-  # TCPリレーサーバ
+## 日本語
 
-  ## 概要
-  **TCPリレーサーバ** は、PythonベースのTCPリレーツールで、データを送受信する際にソースと宛先の間を中継します。複数のモード、自動再接続、デバッグ用のデータダンプオプションをサポートしています。
+### 概要
+TCP Relay Server は、上流から下流への一方向通信を中継する Python 製ツールです。4 種類の接続モード、切断時の自動再接続、データダンプ、複数タブを扱える GUI を備えています。
 
-  **注意:** 本リレーサーバは、ソースからデスティネーションへ一方向にデータを送り続けるプロトコルのみをサポートしています。双方向通信には対応していません。
+**注意:** 上流 -> 下流 の一方向のみ対応です。双方向リレーは非対応です。
 
-  ## 特徴
-  - **4つのリレーモード** をサポート:
-    - `connect-listen`: 上流のサーバに接続し、下流のクライアントを待機。
-    - `listen-connect`: 上流の接続を待機し、下流のサーバへ接続。
-    - `connect-connect`: 上流・下流の両方のサーバに接続。
-    - `listen-listen`: 上流・下流の両方の接続を待機。
-  - **自動再接続** により、接続が切れても再接続。
-  - `connect-listen` と `listen-listen` モードでは**複数のクライアント** をサポート。
-  - **データダンプ** オプションで送受信データを標準出力に表示可能。
-  - **シグナル処理** による安全なシャットダウン。
+### 特長
+- 接続モード: `connect-listen` / `listen-connect` / `connect-connect` / `listen-listen`
+- 切断時の自動再接続（`--retry` 秒、デフォルト 5 秒）
+- `connect-listen` と `listen-listen` では複数クライアントを受け付け
+- 送信データのダンプ表示（`--dump` または GUI のチェック）
+- GUI 版で複数タブ管理と設定の自動保存
 
-  ## 必要環境
-  - Python 3.x
+### 必要要件
+- Python 3.x
+- tkinter（標準同梱。GUI の exe 版にも含まれます）
 
-  ## インストール
-  リポジトリをクローンし、必要な依存関係をインストールします。
-  ```sh
-  $ git clone https://github.com/yourrepo/tcp-relay-server.git
-  $ cd tcp-relay-server
-  ```
-  <button onclick="navigator.clipboard.writeText('$ git clone https://github.com/yourrepo/tcp-relay-server.git\n$ cd tcp-relay-server')">Copy</button>
+### セットアップ
+1. リポジトリを取得:
+   ```sh
+   git clone https://github.com/tanaka-ryuya/TCPRelayServer.git
+   cd TCPRelayServer
+   ```
+2. （任意）仮想環境を作成:
+   ```sh
+   python -m venv .venv
+   .\.venv\Scripts\activate
+   ```
+3. 追加ライブラリのインストールは不要です。
 
-  ## 使い方
-  必要なパラメータを指定してリレーサーバを実行:
-  ```sh
-  $ python relay_server.py <source_address>:<source_port> <destination_address>:<destination_port> --mode <mode> [--dump]
-  ```
-  <button onclick="navigator.clipboard.writeText('$ python relay_server.py <source_address>:<source_port> <destination_address>:<destination_port> --mode <mode> [--dump]')">Copy</button>
+### CLI の使い方
+`tcp_relay_server.py`（または `dist\\tcp_relay_server.exe`）を次のように実行します:
+```sh
+python tcp_relay_server.py <上流ホスト>:<上流ポート> <下流ホスト>:<下流ポート> --mode <モード> [--dump] [--retry 秒]
+```
 
-  ## シグナル処理
-  サーバは以下の方法で安全に停止できます:
-  - `CTRL+C` (SIGINT)
-  - `kill <PID>` (SIGTERM)
+引数:
+- `<上流ホスト>:<上流ポート>`: データを受け取る上流側
+- `<下流ホスト>:<下流ポート>`: データを届ける下流側
+- `--mode`: `connect-listen` / `listen-connect` / `connect-connect` / `listen-listen`（デフォルト: `connect-listen`）
+- `--dump`: 送信データを標準出力に表示
+- `--retry 秒`: 再接続までの待ち時間（デフォルト 5 秒）
 
-  停止時にすべてのソケットが適切に閉じられます。
+### GUI の使い方
+- ソースから起動: `python relay_gui.py`
+- 同梱バイナリ: `dist\\relay_gui.exe`
 
-  ## ライセンス
-  MIT License
+各タブの操作手順:
+1. 上流/下流のホスト・ポートを設定。
+2. モードを選択し、必要なら「dump to log」をオン。
+3. 再接続間隔（秒）を入力。
+4. `Start` で中継開始、`Stop` で停止。
+5. `+` ボタンでタブを追加（直前タブの設定を元に自動補完）。タブヘッダーを右クリック、または「タブを閉じる」ボタンでタブを削除。
 
-  ## 作者
-  [TANAKA RYUYA](https://github.com/tanaka-ryuya/TCPRelayServer)
+設定は終了時に `relay_gui_config.json` に自動保存され、次回起動時に読み込まれます。ログと接続状態はタブ内で確認できます。
 
-</details>
+### ライセンス
+MIT License
 
+### 作者
+[TANAKA RYUYA](https://github.com/tanaka-ryuya/TCPRelayServer)

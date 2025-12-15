@@ -60,7 +60,7 @@ Operation per tab:
 2. Choose mode and (optional) enable "dump to log".
 3. Set reconnect interval seconds.
 4. Click `Start` to run / `Stop` to halt the relay for that tab.
-5. Use the `+` button to add another tab (defaults chain from the previous tab). Right-click a tab header or use the `タブを閉じる` button to remove it.
+5. Use the `+` button to add another tab (defaults chain from the previous tab). Right-click a tab header or use the `Close Tab` button to remove it.
 
 Configuration is automatically saved to `relay_gui_config.json` on exit and loaded on the next start. Logs and connection status are shown in each tab.
 
@@ -137,7 +137,7 @@ python tcp_relay_server.py <上流ホスト>:<上流ポート> <下流ホスト>
 2. モードを選択し、必要なら「dump to log」をオン。
 3. 再接続間隔（秒）を入力。
 4. `Start` で中継開始、`Stop` で停止。
-5. `+` ボタンでタブを追加（直前タブの設定を元に自動補完）。タブヘッダーを右クリック、または「タブを閉じる」ボタンでタブを削除。
+5. `+` ボタンでタブを追加（直前タブの設定を元に自動補完）。タブヘッダーを右クリック、または「Close Tab」ボタンでタブを削除。
 
 設定は終了時に `relay_gui_config.json` に自動保存され、次回起動時に読み込まれます。ログと接続状態はタブ内で確認できます。
 

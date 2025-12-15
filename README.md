@@ -28,7 +28,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     U["Upstream pushes in<br/>(relay listens)"] -->|inbound TCP| R["Relay in DC"]
-    R -->|connect (single)| S["Downstream server"]
+    R -->|connect| S["Downstream server"]
 ```
 
 ### How to Choose a Mode (2 Questions)
@@ -136,7 +136,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     U["上流が接続してくる<br/>(リレーが listen)"] -->|着信| R["リレー (DC 等)"]
-    R -->|connect (単一)| S["下流サーバ"]
+    R -->|connect| S["下流サーバ"]
 ```
 
 ### モード選択の考え方（2 問で決める）

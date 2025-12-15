@@ -15,18 +15,21 @@ TCP Relay Server forwards upstream traffic to a downstream destination in a sing
 ### Mermaid: NAT Traversal Example
 ```mermaid
 flowchart LR
-    U["Upstream Data Server<br/>(one-way sports feed)"] -->|TCP stream| R["Relay behind NAT<br/>(connect to upstream)"]
-    R --> C1[Downstream Client A]
-    R --> C2[Downstream Client B]
-    R --> C3[Downstream Client C]
+    subgraph NAT["Relay site (behind NAT/FW)"]
+        R["Relay<br/>(connects out to upstream)"]
+    end
+    U["Upstream data server<br/>(firehose sports feed)"] -->|TCP stream| R
+    R -->|fan-out| C1["Downstream client A"]
+    R -->|fan-out| C2["Downstream client B"]
+    R -->|fan-out| C3["Downstream client C"]
 ```
 
 ### Mermaid: Upstream-Listen / Downstream-Connect Example
 ```mermaid
 flowchart LR
-    U["Upstream connects in<br/>(Relay listens)"] -->|inbound| R["Relay in DC"]
-    R -->|connect| S1[Downstream Server]
-    R -->|connect| S2[Downstream Backup]
+    U["Upstream pushes in<br/>(relay listens)"] -->|inbound TCP| R["Relay in DC"]
+    R -->|connect| S1["Downstream server"]
+    R -->|connect| S2["Downstream backup"]
 ```
 
 ### How to Choose a Mode (2 Questions)
@@ -121,18 +124,21 @@ TCP Relay Server は、上流から下流への一方向通信を中継する Py
 ### Mermaid: NAT 越え構成例
 ```mermaid
 flowchart LR
-    U["上流データサーバ<br/>(競技フィード)"] -->|TCP ストリーム| R["NAT 内のリレー<br/>(上流へ connect)"]
-    R --> C1[下流クライアント A]
-    R --> C2[下流クライアント B]
-    R --> C3[下流クライアント C]
+    subgraph NAT["リレー設置拠点 (NAT/FW 内)"]
+        R["リレー<br/>(上流へ outbound 接続)"]
+    end
+    U["上流データサーバ<br/>(競技フィード)"] -->|TCP ストリーム| R
+    R -->|分配| C1["下流クライアント A"]
+    R -->|分配| C2["下流クライアント B"]
+    R -->|分配| C3["下流クライアント C"]
 ```
 
 ### Mermaid: 上流待受 / 下流へ接続する例
 ```mermaid
 flowchart LR
-    U["上流が接続してくる<br/>(リレーが listen)"] -->|着信| R["リレーサーバ"]
-    R -->|connect| S1[下流サーバ]
-    R -->|connect| S2[下流バックアップ]
+    U["上流が接続してくる<br/>(リレーが listen)"] -->|着信| R["リレー (DC 等)"]
+    R -->|connect| S1["下流サーバ"]
+    R -->|connect| S2["下流バックアップ"]
 ```
 
 ### モード選択の考え方（2 問で決める）

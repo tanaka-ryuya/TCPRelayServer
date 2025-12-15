@@ -9,16 +9,15 @@ import errno
 
 class TCPRelayServer:
     """
-    上流 → 下流 への一方向リレー。
+    One-way relay from upstream -> downstream.
     - mode:
-        connect-listen : 上流に connect / 下流を listen（複数クライアント）
-        listen-connect : 上流を listen / 下流に connect（1対1）
-        connect-connect: 上下とも connect（1対1-1対1）
-        listen-listen  : 上流を listen / 下流を listen（複数クライアント）
+        connect-listen : connect to upstream / listen for downstream clients
+        listen-connect : listen for upstream / connect to downstream (1:1)
+        connect-connect: connect to upstream and downstream (1:1)
+        listen-listen  : listen for upstream and downstream (multi-clients)
     """
 
-    def __init__(self, src_host, src_port, dst_host, dst_port, mode,
-                 dump=False, retry_interval=5):
+    def __init__(self, src_host, src_port, dst_host, dst_port, mode, dump=False, retry_interval=5):
         self.src_host = src_host
         self.src_port = src_port
         self.dst_host = dst_host
@@ -27,19 +26,19 @@ class TCPRelayServer:
         self.dump = dump
         self.retry_interval = retry_interval
 
-        # 接続用ソケット
-        self.upstream_socket = None       # 上流との 1 対 1
-        self.downstream_socket = None     # connect-* のときの下流との 1 対 1
-        self.client_sockets = []          # *-listen のときの複数クライアント
+        # Sockets for connections
+        self.upstream_socket = None       # 1:1 with upstream
+        self.downstream_socket = None     # 1:1 with downstream for connect-* modes
+        self.client_sockets = []          # multiple downstream clients for *-listen modes
 
-        # listen 用ソケット
+        # Listen sockets
         self.upstream_server_socket = None
         self.client_server_socket = None
 
         self.running = True
         self.client_lock = threading.Lock()
 
-        # GUI / CUI 向け通知用コールバック
+        # Callbacks for GUI / CLI
         self.on_upstream_status_change = None    # func(bool)
         self.on_downstream_status_change = None  # func(bool)
         self.on_client_count_change = None       # func(int)
@@ -49,10 +48,10 @@ class TCPRelayServer:
         self._cleaned = False
 
     # ---------------------------------------
-    # ログ
+    # Logging
     # ---------------------------------------
     def _log(self, msg: str):
-        """通常ログ（GUIにもCUIにも流す）"""
+        """Normal log; also forwards to GUI if on_log is set."""
         print(msg)
         if self.on_log:
             try:
@@ -62,9 +61,9 @@ class TCPRelayServer:
 
     def _log_dump(self, text: str):
         """
-        dump用のログ。
-        - GUI（on_logあり）のとき：ターミナルには出さず GUI ログだけに出す
-        - CUI（on_logなし）のとき：ターミナルにだけ出す
+        Dump log:
+        - GUI (on_log present): log only to GUI
+        - CLI (no on_log): print to stdout
         """
         if self.on_log:
             try:
@@ -75,10 +74,10 @@ class TCPRelayServer:
             print(text)
 
     # ---------------------------------------
-    # 下流（listen 系）: クライアント数・一覧・状態を通知
+    # Downstream listen mode: notify client count/list/status
     # ---------------------------------------
     def _notify_downstream_listen_state(self, reason: str = ""):
-        """client_sockets の内容からクライアント数・状態・一覧を通知"""
+        """Notify client count and list based on client_sockets."""
         with self.client_lock:
             count = len(self.client_sockets)
             info_list = []
@@ -87,7 +86,7 @@ class TCPRelayServer:
                     addr, port = s.getpeername()
                     info_list.append(f"{addr}:{port}")
                 except OSError:
-                    # 切断済みの場合はここでは無視（送信時に掃除）
+                    # Ignore closed sockets here; handled during send
                     pass
 
         dbg = f"listen-side state ({reason}) clients={count} [{', '.join(info_list)}]"
@@ -117,10 +116,10 @@ class TCPRelayServer:
                 pass
 
     # ---------------------------------------
-    # 下流（connect 系）: 1クライアント相当として状態通知
+    # Downstream connect mode: notify as single-client equivalent
     # ---------------------------------------
     def _notify_downstream_connect_state(self, connected: bool, reason: str = ""):
-        """connect-* モードのときのクライアント数・一覧・状態"""
+        """Notify client count/list/status for connect-* modes."""
         count = 1 if connected else 0
         info_list = []
 
@@ -158,16 +157,16 @@ class TCPRelayServer:
                 pass
 
     # ---------------------------------------
-    # メイン
+    # Main
     # ---------------------------------------
     def start(self):
-        # 再起動に備えてリセット
+        # Reset for restart
         self.running = True
         self._cleaned = False
 
         self._log(f"Starting relay server in mode: {self.mode}")
 
-        # 上流設定
+        # Upstream setup
         try:
             if self.mode in ["connect-listen", "connect-connect"]:
                 threading.Thread(target=self.connect_upstream, daemon=True).start()
@@ -181,7 +180,7 @@ class TCPRelayServer:
             )
             self.running = False
 
-        # 下流設定
+        # Downstream setup
         if self.running:
             try:
                 if self.mode in ["connect-listen", "listen-listen"]:
@@ -196,7 +195,7 @@ class TCPRelayServer:
                 )
                 self.running = False
 
-        # メインループ
+        # Main loop
         try:
             while self.running:
                 time.sleep(1)
@@ -206,7 +205,7 @@ class TCPRelayServer:
             self.cleanup()
 
     # ---------------------------------------
-    # 上流 connect
+    # Upstream connect
     # ---------------------------------------
     def connect_upstream(self):
         while self.running:
@@ -214,10 +213,10 @@ class TCPRelayServer:
             try:
                 self._log(f"connect_upstream: trying {self.src_host}:{self.src_port}")
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                # 接続試行がブロックされるのを防ぐためタイムアウトを設定
+                # Set timeout to avoid blocking forever on connect attempt
                 s.settimeout(self.retry_interval)
                 s.connect((self.src_host, self.src_port))
-                s.settimeout(None)  # 接続後はブロックモードに戻す
+                s.settimeout(None)  # back to blocking after connect
                 self.upstream_socket = s
 
                 self._log(f"Connected to upstream {self.src_host}:{self.src_port}")
@@ -231,7 +230,6 @@ class TCPRelayServer:
 
             except OSError as e:
                 if not self.running:
-                    # 停止中に出たエラーは無視
                     break
 
                 if e.errno == errno.EADDRINUSE:
@@ -268,10 +266,10 @@ class TCPRelayServer:
                 self._log("connect_upstream: disconnected, loop end or retry")
 
     # ---------------------------------------
-    # 上流 listen
+    # Upstream listen
     # ---------------------------------------
     def _listen_upstream_or_die(self):
-        """上流を listen。失敗したら例外を投げて start() 側で止める。"""
+        """Listen for upstream. Raise on failure so start() can stop."""
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
@@ -293,7 +291,7 @@ class TCPRelayServer:
                 sock, addr = self.upstream_server_socket.accept()
                 self._log(f"Upstream connected: {addr}")
 
-                # 既存の接続があれば強制的に閉じる (listen-connect/listen-listen モードは1対1の upstream)
+                # Close existing upstream connection (listen-* modes are 1:1 upstream)
                 if self.upstream_socket:
                     self._log("closing previous upstream connection")
                     try:
@@ -329,10 +327,10 @@ class TCPRelayServer:
                 self._log("upstream accept loop: upstream disconnected")
 
     # ---------------------------------------
-    # 下流 listen（複数クライアント）
+    # Downstream listen (multi-client)
     # ---------------------------------------
     def _listen_clients_or_die(self):
-        """下流クライアントを listen。失敗したら例外を投げて start() 側で止める。"""
+        """Listen for downstream clients. Raise on failure so start() can stop."""
         srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
@@ -367,7 +365,7 @@ class TCPRelayServer:
                 self._log(f"Error accepting client (unexpected): {e}")
 
     # ---------------------------------------
-    # 下流 connect（1対1）
+    # Downstream connect (1:1)
     # ---------------------------------------
     def connect_downstream(self):
         while self.running:
@@ -375,37 +373,34 @@ class TCPRelayServer:
             try:
                 self._log(f"connect_downstream: trying {self.dst_host}:{self.dst_port}")
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                # 接続試行がブロックされるのを防ぐためタイムアウトを設定
+                # Set timeout to avoid blocking forever on connect attempt
                 s.settimeout(self.retry_interval)
                 s.connect((self.dst_host, self.dst_port))
-                s.settimeout(None)  # 接続後はブロックモードに戻す
+                s.settimeout(None)  # back to blocking after connect
                 self.downstream_socket = s
 
                 self._log(f"Connected to downstream {self.dst_host}:{self.dst_port}")
                 self._notify_downstream_connect_state(True, reason="connect_downstream_connected")
 
-                # 接続維持ループ: 接続が切断されるまで待機する
+                # Keep-alive loop until disconnected
                 while self.running and self.downstream_socket is s:
                     try:
-                        # ゼロバイト受信 (MSG_PEEK) を試みて接続状態を確認
-                        s.settimeout(0.5)  # 一時的に短いタイムアウトを設定
-                        # データを消費せず、ソケットが切れたかをチェックする
+                        # Peek to verify connection still alive
+                        s.settimeout(0.5)
                         data = s.recv(1, socket.MSG_PEEK)
-                        s.settimeout(None)  # ブロックモードに戻す
+                        s.settimeout(None)
 
                         if data == b'':
-                            # 0バイトのデータ受信は接続が正常に切断されたことを示す
+                            # Empty read means connection closed
                             self._log("Downstream socket detected closed (recv(1) peek returned empty).")
                             break
 
-                        # データが届いている場合は無視（一方向リレーのため）
-                        time.sleep(0.1)  # サーバー負荷軽減のため短い待機
+                        # Ignore payload here (one-way relay)
+                        time.sleep(0.1)
 
                     except socket.timeout:
-                        # データが来ていないだけなので継続
                         continue
                     except OSError as e:
-                        # 接続が切れたことによるエラー
                         self._log(f"Downstream socket detected error: {e}")
                         break
                     except Exception as e:
@@ -446,7 +441,7 @@ class TCPRelayServer:
                     self._log("connect_downstream: disconnected, loop end or retry")
 
     # ---------------------------------------
-    # 中継（上流 → 下流）
+    # Relay (upstream -> downstream)
     # ---------------------------------------
     def relay_from_upstream(self):
         try:
@@ -455,7 +450,6 @@ class TCPRelayServer:
                     data = self.upstream_socket.recv(4096)
                 except OSError as e:
                     if not self.running:
-                        # 終了処理中の recv エラーは無視
                         break
                     self._log(f"Error receiving data from upstream (OSError): {e}")
                     break
@@ -469,7 +463,7 @@ class TCPRelayServer:
                             pass
                     break
 
-                # ★dumpフラグが立っているときだけ中身をログに出す（サイズログは出さない）
+                # Dump payload if enabled (content only, not size)
                 if self.dump:
                     try:
                         text = data.decode("utf-8")
@@ -477,7 +471,7 @@ class TCPRelayServer:
                         text = repr(data)
                     self._log_dump(text)
 
-                # 下流が listen 側（複数クライアント）
+                # Downstream is listen side (multi-clients)
                 if self.mode in ["connect-listen", "listen-listen"]:
                     with self.client_lock:
                         targets = list(self.client_sockets)
@@ -507,7 +501,7 @@ class TCPRelayServer:
                                     pass
                         self._notify_downstream_listen_state(reason="send_error")
 
-                # 下流が connect 側（1 対 1）
+                # Downstream is connect side (1:1)
                 if self.mode in ["listen-connect", "connect-connect"]:
                     if self.downstream_socket:
                         try:
@@ -526,22 +520,22 @@ class TCPRelayServer:
                 self._log(f"Error receiving data from upstream: {e}")
 
     # ---------------------------------------
-    # 終了処理
+    # Shutdown
     # ---------------------------------------
     def handle_exit(self, signum=None, frame=None):
-        """GUIやシグナルから呼ぶ。ここでは running=False にするだけ。"""
+        """Called from GUI or signal; just set running=False."""
         self._log("Shutting down relay server (handle_exit)...")
         self.running = False
 
     def cleanup(self):
-        """start() の finally から一度だけ呼ばれる想定。"""
+        """Called once from start() finally."""
         if self._cleaned:
             return
         self._cleaned = True
 
         self._log("Closing connections...")
 
-        # クライアントソケット
+        # Client sockets
         with self.client_lock:
             for client_socket in self.client_sockets:
                 try:
@@ -554,7 +548,7 @@ class TCPRelayServer:
                     pass
             self.client_sockets.clear()
 
-        # listen / connect ソケット
+        # Listen / connect sockets
         for sock in [
             self.upstream_socket,
             self.downstream_socket,
@@ -571,7 +565,7 @@ class TCPRelayServer:
                 except Exception:
                     pass
 
-        # 状態リセット通知
+        # Notify reset status
         if self.mode in ["connect-listen", "listen-listen"]:
             self._notify_downstream_listen_state(reason="cleanup")
         else:
@@ -616,11 +610,11 @@ def main():
     )
 
     signal.signal(signal.SIGINT, relay_server.handle_exit)
-    # SIGTERM は Windowsでは使えないため、Linux/macOS向け
+    # SIGTERM not available on Windows; best-effort on Linux/macOS
     try:
         signal.signal(signal.SIGTERM, relay_server.handle_exit)
     except ValueError:
-        pass  # Windowsでは無視する
+        pass  # ignore on platforms without SIGTERM
 
     relay_server.start()
 

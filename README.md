@@ -5,7 +5,43 @@
 ### Overview
 TCP Relay Server forwards upstream traffic to a downstream destination in a single direction. It offers four connection modes, automatic reconnection, optional data dumping, and a GUI for operating multiple relays in parallel.
 
-**Note:** Only one-way flows (upstream -> downstream) are supported. Bidirectional relaying is not implemented.
+**Note:** Only one-way flows (upstream -> downstream) are supported. Bidirectional relaying is not implemented; for firehose-style feeds (sports competition data, telemetry, live stats), one-way delivery is typically sufficient because clients only need to receive.
+
+### Intended Use Case
+- One-way continuous stream, e.g., sports competition data feeds or telemetry that must be fanned out to multiple receivers on-site or remote.
+- Works when NAT / firewall (FW) / asymmetric reachability (only one side can reach; even ping fails from the other side) block inbound paths.
+- By choosing connect/listen roles correctly, the relay can sit behind NAT while still reaching upstream and serving downstream clients.
+
+### Mermaid: NAT Traversal Example
+```mermaid
+flowchart LR
+    U[Upstream Data Server\n(one-way sports feed)] -->|TCP stream| R[Relay behind NAT\n(connect to upstream)]
+    R --> C1[Downstream Client A]
+    R --> C2[Downstream Client B]
+    R --> C3[Downstream Client C]
+```
+
+### Mermaid: Upstream-Listen / Downstream-Connect Example
+```mermaid
+flowchart LR
+    U[Upstream connects in\n(Relay listens)] -->|inbound| R[Relay in DC]
+    R -->|connect| S1[Downstream Server]
+    R -->|connect| S2[Downstream Backup]
+```
+
+### How to Choose a Mode (2 Questions)
+1) Who can initiate TCP toward the upstream side? (relay -> upstream, or upstream -> relay)
+2) Who initiates on the downstream side? (clients connect in, or relay connects out)
+
+Mode cheat sheet:
+- `connect-listen`: Relay connects to upstream; downstream clients connect to relay. Default for “relay behind NAT, multiple consumers”.
+- `listen-connect`: Upstream connects into relay; relay connects out to downstream.
+- `connect-connect`: Relay dials both sides (use when both ends only allow outbound).
+- `listen-listen`: Relay listens on both sides (use when both ends can reach the relay directly).
+
+Examples:
+- Relay inside NAT, can dial upstream, downstream clients will connect → choose `connect-listen`.
+- Upstream must push in, downstream must be dialed by relay → choose `listen-connect` (or `listen-listen` if downstream also connects in).
 
 ### Features
 - Four relay modes: `connect-listen`, `listen-connect`, `connect-connect`, `listen-listen`
@@ -27,7 +63,7 @@ TCP Relay Server forwards upstream traffic to a downstream destination in a sing
 2. (Optional) Create a virtual environment:
    ```sh
    python -m venv .venv
-   .\.venv\Scripts\activate
+   .\\.venv\\Scripts\\activate
    ```
 3. No extra pip packages are required for the CLI or GUI.
 
@@ -57,6 +93,11 @@ Operation per tab:
 
 Configuration is automatically saved to `relay_gui_config.json` on exit and loaded on the next start. Logs and connection status are shown in each tab.
 
+### Limitations
+- One-way only (upstream -> downstream); not a bidirectional TCP proxy.
+- No protocol parsing or application-layer awareness; payload is relayed as-is.
+- Not suited for interactive bidirectional apps (SSH, databases, chat, etc.).
+
 ### License
 MIT License
 
@@ -70,7 +111,43 @@ MIT License
 ### 概要
 TCP Relay Server は、上流から下流への一方向通信を中継する Python 製ツールです。4 種類の接続モード、切断時の自動再接続、データダンプ、複数タブを扱える GUI を備えています。
 
-**注意:** 上流 -> 下流 の一方向のみ対応です。双方向リレーは非対応です。
+**注意:** 上流 -> 下流 の一方向のみ対応です。双方向リレーは非対応です。スポーツ配信やテレメトリなど「垂れ流し型」では受信専用が多く、一方向で十分なケースが一般的です。
+
+### 想定ユースケース（重要）
+- スポーツ競技データやテレメトリなど、一方向の連続ストリームを複数へ分配する現場。
+- NAT / FW（ファイアウォール）/ 非対称到達性（asymmetric reachability: 片側からは届くが逆は届かない、ping も通らない場合あり）でも動かしたい。
+- connect/listen の役割を正しく選べば、リレーを NAT 内側に置いたまま上流へ接続しつつ、下流クライアントにもサービスできる。
+
+### Mermaid: NAT 越え構成例
+```mermaid
+flowchart LR
+    U[上流データサーバ\n(競技フィード)] -->|TCP ストリーム| R[NAT 内のリレー\n(上流へ connect)]
+    R --> C1[下流クライアント A]
+    R --> C2[下流クライアント B]
+    R --> C3[下流クライアント C]
+```
+
+### Mermaid: 上流待受 / 下流へ接続する例
+```mermaid
+flowchart LR
+    U[上流が接続してくる\n(リレーが listen)] -->|着信| R[リレーサーバ]
+    R -->|connect| S1[下流サーバ]
+    R -->|connect| S2[下流バックアップ]
+```
+
+### モード選択の考え方（2 問で決める）
+1) 上流側へ TCP を張れるのはどちら？（リレーから発信か、上流から着信か）
+2) 下流側は接続してくる？ それともリレーから繋ぎに行く？
+
+モード簡易表:
+- `connect-listen`: リレーが上流へ接続し、下流からの接続を待ち受け。NAT 内に置く場合の第一候補。
+- `listen-connect`: 上流がリレーへ接続し、リレーが下流へ接続。
+- `connect-connect`: 両側ともリレーから発信（両端が外向きのみ許可のとき）。
+- `listen-listen`: 両側ともリレーへ接続（両端がリレーへ到達できる場合）。
+
+例:
+- リレーが NAT 内、上流へは外向きで届き、下流クライアントはリレーへ接続してくる → `connect-listen`。
+- 上流はリレーへ接続してくる必要があり、下流はリレーから接続したい → `listen-connect`（下流も着信なら `listen-listen` でも可）。
 
 ### 特長
 - 接続モード: `connect-listen` / `listen-connect` / `connect-connect` / `listen-listen`
@@ -92,7 +169,7 @@ TCP Relay Server は、上流から下流への一方向通信を中継する Py
 2. （任意）仮想環境を作成:
    ```sh
    python -m venv .venv
-   .\.venv\Scripts\activate
+   .\\.venv\\Scripts\\activate
    ```
 3. 追加ライブラリのインストールは不要です。
 
@@ -121,6 +198,11 @@ python tcp_relay_server.py <上流ホスト>:<上流ポート> <下流ホスト>
 5. `+` ボタンでタブを追加（直前タブの設定を元に自動補完）。タブヘッダーを右クリック、または「タブを閉じる」ボタンでタブを削除。
 
 設定は終了時に `relay_gui_config.json` に自動保存され、次回起動時に読み込まれます。ログと接続状態はタブ内で確認できます。
+
+### 制限事項
+- 一方向のみ（上流 -> 下流）。双方向 TCP プロキシ用途には非対応。
+- プロトコル解析なし。ペイロードはそのまま中継。
+- SSH や DB など双方向インタラクティブ用途には適しません。
 
 ### ライセンス
 MIT License

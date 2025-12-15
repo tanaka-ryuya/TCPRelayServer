@@ -10,7 +10,7 @@ TCP Relay Server forwards upstream traffic to a downstream destination in a sing
 ### Intended Use Case
 - One-way continuous stream, e.g., sports competition data feeds or telemetry that must be fanned out to multiple receivers on-site or remote.
 - Works when NAT / firewall (FW) / asymmetric reachability (only one side can reach; even ping fails from the other side) block inbound paths.
-- By choosing connect/listen roles correctly, the relay can sit behind NAT while still reaching upstream and serving downstream clients.
+- By chaining multiple relays and selecting the connect/listen roles correctly, a relay can be placed behind NAT while still connecting to the upstream source and serving downstream clients.
 
 
 
@@ -87,7 +87,7 @@ TCP Relay Server は、上流から下流への一方向通信を中継する Py
 ### 想定ユースケース（重要）
 - スポーツ競技データやテレメトリなど、一方向の連続ストリームを複数へ分配する現場。
 - NAT / FW（ファイアウォール）/ 非対称到達性（asymmetric reachability: 片側からは届くが逆は届かない、ping も通らない場合あり）でも動かしたい。
-- connect/listen の役割を正しく選べば、リレーを NAT 内側に置いたまま上流へ接続しつつ、下流クライアントにもサービスできる。
+- リレーを多段接続しconnect/listen の役割を正しく選べば、リレーを NAT 内側に置いたまま上流へ接続しつつ、下流クライアントにもサービスできる。
 
 
 

@@ -37,8 +37,8 @@ flowchart LR
 
 Mode cheat sheet:
 - `connect-listen`: Relay connects to upstream; downstream clients connect to relay. Default for “relay behind NAT, multiple consumers”.
-- `listen-connect`: Upstream connects into relay; relay connects out to downstream.
-- `connect-connect`: Relay dials both sides (use when both ends only allow outbound).
+- `listen-connect`: Upstream connects into relay; relay connects out to a single downstream.
+- `connect-connect`: Relay dials one upstream and one downstream (both ends only allow outbound).
 - `listen-listen`: Relay listens on both sides (use when both ends can reach the relay directly).
 
 Examples:
@@ -145,8 +145,8 @@ flowchart LR
 
 モード簡易表:
 - `connect-listen`: リレーが上流へ接続し、下流からの接続を待ち受け。NAT 内に置く場合の第一候補。
-- `listen-connect`: 上流がリレーへ接続し、リレーが下流へ接続。
-- `connect-connect`: 両側ともリレーから発信（両端が外向きのみ許可のとき）。
+- `listen-connect`: 上流がリレーへ接続し、リレーが単一の下流へ接続。
+- `connect-connect`: 両側ともリレーから発信（上流 1 / 下流 1 のみ、両端が外向きのみ許可のとき）。
 - `listen-listen`: 両側ともリレーへ接続（両端がリレーへ到達できる場合）。
 
 例:

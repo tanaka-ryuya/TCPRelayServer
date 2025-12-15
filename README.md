@@ -120,23 +120,46 @@ TCP Relay Server は、上流から下流への一方向通信を中継する Py
 - NAT / FW（ファイアウォール）/ 非対称到達性（asymmetric reachability: 片側からは届くが逆は届かない、ping も通らない場合あり）でも動かしたい。
 - connect/listen の役割を正しく選べば、リレーを NAT 内側に置いたまま上流へ接続しつつ、下流クライアントにもサービスできる。
 
-### Mermaid: NAT 越え構成例
+### Mermaid: どう考えてモードを選ぶか
 ```mermaid
-flowchart LR
-    subgraph NAT["リレー設置拠点 (NAT/FW 内)"]
-        R["リレー<br/>(上流へ outbound 接続)"]
-    end
-    U["上流データサーバ<br/>(競技フィード)"] -->|TCP ストリーム| R
-    R -->|分配| C1["下流クライアント A"]
-    R -->|分配| C2["下流クライアント B"]
-    R -->|分配| C3["下流クライアント C"]
+flowchart TD
+    Q1["上流サーバへ<br/>TCP接続を張れるのはどちら？"]
+    A1["リレーから接続できる"]
+    A2["上流からしか接続できない"]
+
+    Q2["下流はどう受信する？"]
+    B1["下流がリレーへ接続"]
+    B2["リレーが下流へ接続"]
+
+    M1["connect-listen"]
+    M2["connect-connect"]
+    M3["listen-listen"]
+    M4["listen-connect"]
+
+    Q1 --> A1 --> Q2
+    Q1 --> A2 --> Q2
+
+    Q2 --> B1 --> M1
+    Q2 --> B2 --> M2
+    Q2 --> B1 --> M3
+    Q2 --> B2 --> M4
+
 ```
 
-### Mermaid: 上流待受 / 下流へ接続する例
+### Mermaid: NAT 内に置く王道ケース
 ```mermaid
 flowchart LR
-    U["上流が接続してくる<br/>(リレーが listen)"] -->|着信| R["リレー (DC 等)"]
-    R -->|connect| S["下流サーバ"]
+    subgraph NAT["NAT / FW 内"]
+        R["Relay<br/>(upstream: connect<br/>downstream: listen)"]
+    end
+
+    U["Upstream server<br/>(firehose feed)"]
+    C1["Client A"]
+    C2["Client B"]
+
+    R -- outbound connect --> U
+    C1 -- inbound connect --> R
+    C2 -- inbound connect --> R
 ```
 
 ### モード選択の考え方（2 問で決める）
